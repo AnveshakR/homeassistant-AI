@@ -60,19 +60,10 @@ async def record(ctx:commands.Context):
     ctx.voice_client.start_recording(MP3Sink(), finished_callback, ctx)
 
 async def finished_callback(sink, ctx):
-    # Here you can access the recorded files:
-    # recorded_users = [
-    #     f"<@{user_id}>"
-    #     for user_id, audio in sink.audio_data.items()
-    # ]
-    # files = [discord.File(audio.file, f"{user_id}.{sink.encoding}") for user_id, audio in sink.audio_data.items()]
 
     for user_id, audio in sink.audio_data.items():
         file = discord.File(audio.file, f"{user_id}.{sink.encoding}")
         transcript = stt.process_from_audio_data(file.fp.read(), 'raw')
-        # with open(file.filename, 'wb') as f:
-        #     f.write(file.fp.read())
-        #     f.close()
         await ctx.channel.send(f"Transcript for {user_id}: {transcript}") 
 
 @bot.command(name='stop', pass_context=True)

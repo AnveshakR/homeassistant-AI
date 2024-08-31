@@ -1,3 +1,5 @@
 ## Discord PA
 
-voice based personal assistant for discord
+home automator with discord and langchain
+
+used in conjunction with AnveshakR/WebMoodLighting

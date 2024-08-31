@@ -1,13 +1,15 @@
+import os
 from dotenv import load_dotenv
 import discord
 from discord.ext import commands
-from discord.sinks import MP3Sink, AudioData
+from discord.sinks import MP3Sink
 import asyncio
-import os
-import stt
+
+from langchain_funcs import *
 
 load_dotenv()
-DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
+
+DISCORD_TOKEN=os.getenv('DISCORD_KEY')
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -17,7 +19,8 @@ bot = commands.Bot(command_prefix='pa ', intents=intents, help_command=None)
 @bot.event
 async def on_ready():
     # Bot presence
-    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name="pa help"))
+    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name="pa record"))
+    
 
 @bot.command(name = 'join', description = "Joins your voice channel", aliases=['connect'], pass_context=True)
 async def join(ctx:commands.Context, bot_voice=None, loading_msg=None, called=False):
@@ -52,23 +55,42 @@ async def join(ctx:commands.Context, bot_voice=None, loading_msg=None, called=Fa
         await loading_msg.edit(content = "Bot already in another voice channel!")
         return False, "Bot already in another voice channel!"
     
-
-@bot.command(name="record", pass_context=True)
+@bot.command(name = 'record', description = "Records 3s clip of voice of user", pass_context=True)
 async def record(ctx:commands.Context):
+    
+    loading_msg = await ctx.send("Loading...")
     bot_voice = discord.utils.get(bot.voice_clients, guild=ctx.guild)
-    connect_flag, message = await join(ctx, bot_voice=bot_voice, called=True)
-    ctx.voice_client.start_recording(MP3Sink(), finished_callback, ctx)
-
-async def finished_callback(sink, ctx):
-
-    for user_id, audio in sink.audio_data.items():
-        file = discord.File(audio.file, f"{user_id}.{sink.encoding}")
-        transcript = stt.process_from_audio_data(file.fp.read(), 'raw')
-        await ctx.channel.send(f"Transcript for {user_id}: {transcript}") 
-
-@bot.command(name='stop', pass_context=True)
-async def stop(ctx:commands.Context):
-    ctx.voice_client.stop_recording()
-
-
+    connect_flag, message = await join(ctx, bot_voice=bot_voice, loading_msg=loading_msg, called=True)
+    bot_voice = discord.utils.get(bot.voice_clients, guild=ctx.guild)
+    if not connect_flag:
+        loading_msg.edit(content=message)
+    
+    author_id = ctx.author.id
+    sink = MP3Sink()
+    
+    async def finished_recording(sink):
+        
+        audio = sink.audio_data[author_id]
+   
+        with open(f'{author_id}.mp3', 'wb') as f:
+            f.write(audio.file.read())
+        await ctx.send(f"Processing voice for {ctx.author.mention}")
+        
+        prompt = await user_prompt_from_audio(f"{author_id}.mp3", perform_function_call=False, delete_after=True)
+    
+        await ctx.send(f"You said, {prompt}")
+        # is this correct
+        
+        await function_call_from_user_prompt(prompt)
+        
+    bot_voice.start_recording(sink, finished_recording)
+    await ctx.send("Started recording!")
+    
+    bot.loop.create_task(stop_recording_after_delay(bot_voice, ctx, 3))
+    
+async def stop_recording_after_delay(vc, ctx, delay):
+    await asyncio.sleep(delay)
+    vc.stop_recording()
+    await ctx.send(f"Recording stopped after {delay} seconds!")
+    
 bot.run(DISCORD_TOKEN)

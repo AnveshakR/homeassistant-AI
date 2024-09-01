@@ -10,6 +10,7 @@ import requests
 
 from dotenv import load_dotenv
 import os
+import asyncio
 
 import matplotlib as mpl
 
@@ -58,7 +59,6 @@ async def function_call_from_user_prompt(user_prompt):
     chain = create_structured_output_chain(LightClass, llm, prompt)
 
     web_led_url = open('curr_url', 'r').readline()
-    print(web_led_url)
 
     post_data = dict()
     
@@ -94,3 +94,5 @@ async def user_prompt_from_audio(user_audio_path, perform_function_call=True, de
         return user_prompt  
     
        
+if __name__=="__main__":
+    asyncio.run(function_call_from_user_prompt("Make them breathing red"))

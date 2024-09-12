@@ -12,6 +12,7 @@ import os
 import asyncio
 
 import matplotlib as mpl
+import argparse
 
 load_dotenv()
 
@@ -60,7 +61,7 @@ async def function_call_from_user_prompt(user_prompt):
         
     print(post_data)
     
-    requests.post(f"http://{web_led_url}/update", data=post_data)
+    requests.post(f"{web_led_url}/update", data=post_data)
             
             
 async def user_prompt_from_audio(user_audio_path, perform_function_call=True, delete_after=False):  
@@ -82,4 +83,10 @@ async def user_prompt_from_audio(user_audio_path, perform_function_call=True, de
     
        
 if __name__=="__main__":
-    asyncio.run(function_call_from_user_prompt("Make them dark red"))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--prompt", help="prompt from Apple shortcuts")
+    args = parser.parse_args()
+    if args.prompt is not None:
+        asyncio.run(function_call_from_user_prompt(args.prompt))
+    else:
+        asyncio.run(function_call_from_user_prompt("Make them dark red"))

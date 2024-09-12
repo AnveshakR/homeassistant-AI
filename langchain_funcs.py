@@ -3,7 +3,6 @@ from langchain_community.document_loaders.parsers.audio import OpenAIWhisperPars
 from langchain_openai import ChatOpenAI
 from langchain.pydantic_v1 import BaseModel, Field
 from langchain.chains.openai_functions import create_structured_output_chain
-from langchain.output_parsers import StructuredOutputParser, ResponseSchema
 from langchain.prompts import PromptTemplate
 from typing import Optional
 import requests
@@ -20,22 +19,10 @@ openai_api_key = os.getenv("OPENAI_SECRET")
 
 
 async def function_call_from_user_prompt(user_prompt):
-    response_schemas = [
-        ResponseSchema(name="bad_string", description="This a poorly formatted user input string"),
-        ResponseSchema(name="good_string", description="This is your response, a reformatted response")
-    ]
-
-    # How you would like to parse your output
-    output_parser = StructuredOutputParser.from_response_schemas(response_schemas)
-
-    # See the prompt template you created for formatting
-    format_instructions = output_parser.get_format_instructions()
-
     template = """
-    You will be given a poorly formatted string from a user.
-    Reformat it and make sure all the words are spelled correctly
-
-    {format_instructions}
+    You will be given an instruction from a user.
+    You have to infer a structured output from keywords in the instruction. 
+    You have to infer a color name from the keywords which has to be one of these colors: {colors}
 
     % USER INPUT:
     {user_input}
@@ -45,7 +32,7 @@ async def function_call_from_user_prompt(user_prompt):
 
     prompt = PromptTemplate(
         input_variables=["user_input"],
-        partial_variables={"format_instructions": format_instructions},
+        partial_variables={"colors":", ".join(mpl.colors.cnames.keys())},
         template=template
     )
 
@@ -68,7 +55,7 @@ async def function_call_from_user_prompt(user_prompt):
     if output.light_type is not None:
         post_data['display_input'] = output.light_type
     
-    if output.color_name is not None and output.color_name in user_prompt and output.color_name in mpl.colors.cnames:
+    if output.color_name is not None and output.color_name in mpl.colors.cnames:
         post_data['picker_input'] = mpl.colors.cnames[output.color_name]
         
     print(post_data)
@@ -95,4 +82,4 @@ async def user_prompt_from_audio(user_audio_path, perform_function_call=True, de
     
        
 if __name__=="__main__":
-    asyncio.run(function_call_from_user_prompt("Make them breathing red"))
+    asyncio.run(function_call_from_user_prompt("Make them dark red"))

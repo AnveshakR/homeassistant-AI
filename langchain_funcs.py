@@ -1,67 +1,45 @@
 from langchain_core.documents.base import Blob
 from langchain_community.document_loaders.parsers.audio import OpenAIWhisperParser
 from langchain_openai import ChatOpenAI
-from langchain.pydantic_v1 import BaseModel, Field
-from langchain.chains.openai_functions import create_structured_output_chain
-from langchain.prompts import PromptTemplate
-from typing import Optional
-import requests
 
 from dotenv import load_dotenv
 import os
 import asyncio
-
-import matplotlib as mpl
 import argparse
+import logging
+logging.basicConfig(level=logging.INFO)
+
+from utils import *
 
 load_dotenv()
 
-openai_api_key = os.getenv("OPENAI_SECRET")
+openai_api_key = os.getenv("LLM_SECRET")
+model_name = os.getenv("MODEL_NAME")
 
 
 async def function_call_from_user_prompt(user_prompt):
-    template = """
-    You will be given an instruction from a user.
-    You have to infer a structured output from keywords in the instruction. 
-    You have to infer a color name from the keywords which has to be one of these colors: {colors}
-
-    % USER INPUT:
-    {user_input}
-
-    YOUR RESPONSE:
-    """
-
-    prompt = PromptTemplate(
-        input_variables=["user_input"],
-        partial_variables={"colors":", ".join(mpl.colors.cnames.keys())},
-        template=template
-    )
-
-    llm = ChatOpenAI(model='gpt-3.5-turbo', openai_api_key=openai_api_key)
-
-    # stores lighting type and color
-    class LightClass(BaseModel):
-        light_type: Optional[str] = Field(None, description="Lighting type (breathing, solid")
-        color_name: Optional[str] = Field(None, description="color name")
-        
-    chain = create_structured_output_chain(LightClass, llm, prompt)
-
-    web_led_url = open('curr_url', 'r').readline()
-
-    post_data = dict()
+    llm = ChatOpenAI(api_key=openai_api_key,
+                     model=model_name,
+                     temperature=0)
     
-    output = chain.invoke(user_prompt)['function']
-    print(output)
+    # force the agent to use at least one tool
+    agent = llm.bind_tools(tools, tool_choice="any")
     
-    if output.light_type is not None:
-        post_data['display_input'] = output.light_type
+    llm_response = agent.invoke(user_prompt)
+    logging.info(llm_response)
     
-    if output.color_name is not None and output.color_name in mpl.colors.cnames:
-        post_data['picker_input'] = mpl.colors.cnames[output.color_name]
-        
-    print(post_data)
-    
-    requests.post(f"{web_led_url}/update", data=post_data)
+    # generate tool name vs tool object mapping
+    tool_name_to_obj = {tool.name: tool for tool in tools}
+
+    for tool_call in llm_response.tool_calls:
+
+        if tool_call['name'] in tool_name_to_obj:
+            tool_response = tool_name_to_obj[tool_call['name']].invoke(tool_call)
+            logging.info(tool_response)
+        else:
+            logging.error(f"Tool {tool_call['name']} not found in tools list.")
+           
+    return
             
             
 async def user_prompt_from_audio(user_audio_path, perform_function_call=True, delete_after=False):  
@@ -72,8 +50,8 @@ async def user_prompt_from_audio(user_audio_path, perform_function_call=True, de
     documents = parser.lazy_parse(blob)
 
     user_prompt = " ".join(doc.page_content for doc in documents)
+    logging.info("User prompt from Whisper: " + user_prompt)
 
-    print(user_prompt)
     if delete_after:
         os.remove(user_audio_path)    
     if perform_function_call:
@@ -89,4 +67,4 @@ if __name__=="__main__":
     if args.prompt is not None:
         asyncio.run(function_call_from_user_prompt(args.prompt))
     else:
-        asyncio.run(function_call_from_user_prompt("Make them dark red"))
+        asyncio.run(function_call_from_user_prompt("start laptop"))
